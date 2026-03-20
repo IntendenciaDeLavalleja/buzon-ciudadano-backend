@@ -115,7 +115,7 @@ def create_app(config_name=None):
     # Define Content Security Policy
     csp = {
         'default-src': '\'self\'',
-        'img-src': ['\'self\'', 'data:', app.config.get('MINIO_ENDPOINT') or '*', 'https://unpkg.com', 'https://*.tile.openstreetmap.org'],
+        'img-src': ['\'self\'', 'data:', app.config.get('MINIO_PUBLIC_BASE_URL') or '*', 'https://unpkg.com', 'https://*.tile.openstreetmap.org'],
         'script-src': [
             '\'self\'',
             '\'unsafe-inline\'',

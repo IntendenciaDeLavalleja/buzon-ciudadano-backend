@@ -45,13 +45,37 @@ class MinioService:
             # pero fallará al intentar usarlo.
 
     def ensure_bucket_exists(self):
-        """Verifica si el bucket existe y lo crea si es necesario."""
+        """Verifica si el bucket existe, lo crea si es necesario y aplica política pública de lectura."""
+        import json
         try:
             if not self.client.bucket_exists(self.bucket_name):
                 self.client.make_bucket(self.bucket_name)
                 logging.info(f"Bucket '{self.bucket_name}' created successfully.")
             else:
                 logging.info(f"Bucket '{self.bucket_name}' already exists.")
+
+            # Aplicar siempre política pública de lectura para que las URLs directas funcionen.
+            # Sin esto, MinIO generaría URLs presignadas con el hostname interno de Docker,
+            # que son inaccesibles desde el navegador.
+            policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+                        "Resource": [f"arn:aws:s3:::{self.bucket_name}"]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetObject"],
+                        "Resource": [f"arn:aws:s3:::{self.bucket_name}/*"]
+                    }
+                ]
+            }
+            self.client.set_bucket_policy(self.bucket_name, json.dumps(policy))
+            logging.info(f"Public read policy applied to bucket '{self.bucket_name}'.")
         except S3Error as e:
             logging.error(f"Error checking/creating bucket: {e}")
             raise StorageError("Could not initialize storage bucket.")

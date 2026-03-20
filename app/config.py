@@ -21,7 +21,7 @@ class Config:
     WTF_CSRF_SECRET_KEY = os.environ.get('WTF_CSRF_SECRET_KEY') or SECRET_KEY
 
     # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI') or os.environ.get('DATABASE_URI')
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or os.environ.get('SQLALCHEMY_DATABASE_URI')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     _is_sqlite = bool(
@@ -52,9 +52,9 @@ class Config:
     MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT')
     MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY')
     MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY')
-    MINIO_BUCKET = os.environ.get('MINIO_BUCKET') or os.environ.get('MINIO_BUCKET_NAME')
+    MINIO_BUCKET = os.environ.get('MINIO_BUCKET_NAME') or os.environ.get('MINIO_BUCKET')
     MINIO_SECURE = os.environ.get('MINIO_SECURE', 'True').lower() in ('true', '1', 't')
-    MINIO_PUBLIC_BASE_URL = os.environ.get('MINIO_PUBLIC_BASE_URL')
+    MINIO_PUBLIC_BASE_URL = os.environ.get('MINIO_PUBLIC_BASE_URL') or os.environ.get('MINIO_PUBLIC_URL')
 
     # Redis
     REDIS_URL = build_redis_url_from_env(os.environ)
@@ -62,7 +62,7 @@ class Config:
 
     # CORS — lista de orígenes separados por coma en CORS_ORIGINS
     CORS_ALLOWED_ORIGINS = _parse_list_from_env('CORS_ORIGINS') or [
-        os.environ.get('FRONTEND_ORIGIN', 'http://localhost:5173')
+        os.environ.get('FRONTEND_URL', 'http://localhost:5173')
     ]
 
     # Frontend URL para links en emails
