@@ -1,5 +1,5 @@
 Para activar el entorno virtual (desde la carpeta backend):
-    > .\.venv\Scripts\Activate.ps1
+    > venv\Scripts\Activate.ps1
 
 Para instalar dependencias:
     > python -m pip install -r requirements.txt

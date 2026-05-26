@@ -88,9 +88,19 @@ class ProductionConfig(Config):
     PREFERRED_URL_SCHEME = 'https'
 
 
+class TestingConfig(Config):
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    RATELIMIT_ENABLED = False
+    SESSION_COOKIE_SECURE = False
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SQLALCHEMY_ENGINE_OPTIONS = {}
+
+
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
+    'testing': TestingConfig,
     'default': DevelopmentConfig
 }
 

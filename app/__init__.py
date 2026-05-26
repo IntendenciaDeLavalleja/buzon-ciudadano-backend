@@ -1,7 +1,7 @@
 import logging
 import uuid
 import os
-from flask import Flask, g, request
+from flask import Flask, g, request, send_from_directory
 from flask_cors import CORS
 from .config import config
 from .extensions import db, migrate, login_manager, csrf, mail, limiter, talisman, ma
@@ -42,6 +42,12 @@ def create_app(config_name=None):
 
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    public_dir = os.path.normpath(os.path.join(app.root_path, '..', 'public'))
+
+    @app.route('/public/<path:filename>')
+    def backend_public_file(filename):
+        return send_from_directory(public_dir, filename)
 
     # Configure Logging (Structured)
     if not app.debug:

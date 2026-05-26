@@ -11,7 +11,14 @@ from app.models.user import User, TwoFactorCode
 from app.models.ticket import Ticket, TicketAttachment, TicketStatus, TicketStatusHistory
 from app.models.audit import ActivityLog
 from app.models.contact import Contact, EmailLog, ReceivedEmail
-from app.forms.admin import UpdateTicketStatusForm, ContactForm, SendEmailForm
+from app.forms.admin import (
+    AdminUserCreateForm,
+    AdminUserUpdateForm,
+    ContactForm,
+    DeleteUserForm,
+    SendEmailForm,
+    UpdateTicketStatusForm,
+)
 from app.services.mail_service import send_2fa_email, mail_service
 from app.services.minio_service import minio_service
 from app.utils.logging_helper import log_activity
@@ -21,6 +28,26 @@ from . import admin_bp
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+def require_superuser():
+    if current_user.is_superuser:
+        return
+
+    log_activity(
+        action='UNAUTHORIZED_ACCESS',
+        details='Intento de acceso a gestión de administradores sin privilegios.',
+        user=current_user,
+    )
+    abort(403)
+
+
+def user_has_management_history(user):
+    return bool(user.status_changes or user.sent_emails or user.activity_logs)
+
+
+def active_superuser_count():
+    return User.query.filter_by(is_superuser=True, is_active=True).count()
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -310,6 +337,181 @@ def export_logs():
         mimetype='text/csv',
         headers={'Content-disposition': f'attachment; filename={filename}'}
     )
+
+
+@admin_bp.route('/users', methods=['GET', 'POST'])
+@login_required
+def manage_users():
+    require_superuser()
+
+    create_form = AdminUserCreateForm(prefix='create')
+    delete_form = DeleteUserForm(prefix='delete')
+
+    if create_form.validate_on_submit():
+        username = create_form.username.data.strip()
+        email = create_form.email.data.strip().lower()
+
+        existing_email = User.query.filter(
+            db.func.lower(User.email) == email
+        ).first()
+        existing_username = User.query.filter(
+            db.func.lower(User.username) == username.lower()
+        ).first()
+
+        if existing_email:
+            flash('Ya existe un usuario con ese correo.', 'error')
+        elif existing_username:
+            flash('Ya existe un usuario con ese nombre.', 'error')
+        else:
+            user = User(
+                username=username,
+                email=email,
+                is_active=True,
+                is_superuser=create_form.is_superuser.data,
+            )
+            user.set_password(create_form.password.data)
+            db.session.add(user)
+            db.session.commit()
+
+            role_label = 'Super Admin' if user.is_superuser else 'Administrador'
+
+            log_activity(
+                action='CREATE_ADMIN_USER',
+                details=(
+                    f'{role_label} creado: {user.username} ({user.email})'
+                ),
+                user=current_user,
+            )
+            flash(f'{role_label} creado correctamente.', 'success')
+            return redirect(url_for('admin.manage_users'))
+
+    users = User.query.order_by(
+        User.is_active.desc(),
+        User.is_superuser.desc(),
+        User.created_at.desc(),
+    ).all()
+    return render_template(
+        'admin/users.html',
+        create_form=create_form,
+        delete_form=delete_form,
+        users=users,
+    )
+
+
+@admin_bp.route('/users/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_user(id):
+    require_superuser()
+
+    user = User.query.get_or_404(id)
+    form = AdminUserUpdateForm(prefix='edit', obj=user)
+    delete_form = DeleteUserForm(prefix='delete')
+
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+        email = form.email.data.strip().lower()
+
+        existing_email = User.query.filter(
+            db.func.lower(User.email) == email,
+            User.id != user.id,
+        ).first()
+        existing_username = User.query.filter(
+            db.func.lower(User.username) == username.lower(),
+            User.id != user.id,
+        ).first()
+
+        if existing_email:
+            flash('Ya existe un usuario con ese correo.', 'error')
+        elif existing_username:
+            flash('Ya existe un usuario con ese nombre.', 'error')
+        elif user.id == current_user.id and not form.is_active.data:
+            flash(
+                'No puedes desactivar tu propio usuario mientras tienes la sesión activa.',
+                'error',
+            )
+        elif user.is_superuser and not form.is_active.data and active_superuser_count() <= 1:
+            flash(
+                'No puedes desactivar al último super admin activo.',
+                'error',
+            )
+        else:
+            user.username = username
+            user.email = email
+            user.is_active = form.is_active.data
+
+            if form.password.data:
+                user.set_password(form.password.data)
+
+            db.session.commit()
+
+            log_activity(
+                action='UPDATE_ADMIN_USER',
+                details=(
+                    f'Usuario de panel actualizado: {user.username} ({user.email})'
+                ),
+                user=current_user,
+            )
+            flash('Usuario actualizado correctamente.', 'success')
+            return redirect(url_for('admin.manage_users'))
+
+    return render_template(
+        'admin/user_edit.html',
+        delete_form=delete_form,
+        form=form,
+        managed_user=user,
+    )
+
+
+@admin_bp.route('/users/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_user(id):
+    require_superuser()
+
+    form = DeleteUserForm(prefix='delete')
+    if not form.validate_on_submit():
+        abort(400)
+
+    user = User.query.get_or_404(id)
+
+    if user.id == current_user.id:
+        flash('No puedes eliminar tu propio usuario activo.', 'error')
+        return redirect(url_for('admin.manage_users'))
+
+    if user.is_superuser and active_superuser_count() <= 1:
+        flash('No puedes eliminar al último super admin activo.', 'error')
+        return redirect(url_for('admin.manage_users'))
+
+    if user_has_management_history(user):
+        user.is_active = False
+        db.session.commit()
+
+        log_activity(
+            action='DEACTIVATE_ADMIN_USER',
+            details=(
+                f'Usuario de panel desactivado por historial asociado: '
+                f'{user.username} ({user.email})'
+            ),
+            user=current_user,
+        )
+        flash(
+            'El usuario tenía historial asociado y fue desactivado para '
+            'conservar la auditoría.',
+            'info',
+        )
+    else:
+        username = user.username
+        email = user.email
+        db.session.delete(user)
+        db.session.commit()
+
+        log_activity(
+            action='DELETE_ADMIN_USER',
+            details=f'Usuario de panel eliminado: {username} ({email})',
+            user=current_user,
+        )
+        flash('Usuario eliminado correctamente.', 'success')
+
+    return redirect(url_for('admin.manage_users'))
 
 @admin_bp.route('/agenda', methods=['GET', 'POST'])
 @login_required
