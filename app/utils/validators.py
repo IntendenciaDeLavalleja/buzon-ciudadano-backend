@@ -5,7 +5,10 @@ from werkzeug.datastructures import FileStorage
 from flask import current_app
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
-MAX_FILE_SIZE_MB = 1
+# Límite final de la imagen ya optimizada enviada por el frontend.
+# El frontend puede aceptar originales de hasta 30MB y los reduce a
+# maximo 1920px en el lado más largo (WebP @ 0.80) antes de enviarlos.
+MAX_FILE_SIZE_MB = 5
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 class FileValidationError(Exception):
