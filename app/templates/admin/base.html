@@ -85,6 +85,12 @@
                 </li>
                 {% if current_user.is_superuser %}
                 <li>
+                    <a href="{{ url_for('admin.manage_users') }}" class="flex items-center p-3 text-slate-600 rounded-xl hover:bg-slate-100 group transition-all duration-200 {{ 'bg-blue-50 text-blue-700' if (request.endpoint == 'admin.manage_users' or request.endpoint == 'admin.edit_user') else '' }}">
+                        <svg class="w-5 h-5 {{ 'text-blue-600' if (request.endpoint == 'admin.manage_users' or request.endpoint == 'admin.edit_user') else 'text-slate-500 group-hover:text-slate-900' }} transition duration-75" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 9a3 3 0 100-6 3 3 0 000 6Zm-7 8a7 7 0 1114 0H3Zm14-8a2 2 0 100-4 2 2 0 000 4Zm-1.67 1.13a7.962 7.962 0 013.55 2.917A1 1 0 0118 15h-2.08a8.032 8.032 0 00-.59-1.28 6.98 6.98 0 00-1.64-2.09 4.98 4.98 0 011.66-1.5Z"></path></svg>
+                        <span class="ms-3">Administradores</span>
+                    </a>
+                </li>
+                <li>
                     <a href="{{ url_for('admin.view_logs') }}" class="flex items-center p-3 text-slate-600 rounded-xl hover:bg-slate-100 group transition-all duration-200 {{ 'bg-blue-50 text-blue-700' if request.endpoint == 'admin.view_logs' else '' }}">
                         <svg class="w-5 h-5 {{ 'text-blue-600' if request.endpoint == 'admin.view_logs' else 'text-slate-500 group-hover:text-slate-900' }} transition duration-75" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path></svg>
                         <span class="ms-3">Logs de Sistema</span>
