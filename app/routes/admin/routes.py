@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, session, abort, Response
+from flask import render_template, redirect, url_for, flash, request, session, abort, Response, current_app
 from flask_login import login_user, login_required, logout_user, current_user
 from datetime import datetime
 import csv
@@ -21,6 +21,18 @@ from app.forms.admin import (
 )
 from app.services.mail_service import send_2fa_email, mail_service
 from app.services.minio_service import minio_service
+from app.services.localizacion_service import (
+    DEFAULT_ACTIVE_STATUSES,
+    STATUS_LABEL,
+    compute_summary,
+    export_tickets_csv,
+    filters_to_query_string,
+    get_distinct_areas,
+    get_distinct_categories,
+    get_localizar_filters,
+    query_tickets_for_map,
+    serialize_markers,
+)
 from app.utils.logging_helper import log_activity
 
 from . import admin_bp
@@ -661,3 +673,98 @@ def email_sync():
         flash('No hay correos nuevos de las direcciones agendadas.', 'info')
     return redirect(url_for('admin.email_received'))
 
+
+
+# =====================================================================
+# Módulo "Localizar Denuncias" — mapa geoespacial en panel admin.
+# El backend serializa los tickets a JSON y el template renderiza el mapa
+# con Leaflet JS directo desde unpkg.com (ya permitido por la CSP del
+# proyecto). No se publica nada en el frontend React; solo dentro del
+# admin Flask.
+# =====================================================================
+
+def _localizar_active_status_set(filters):
+    """Conjunto (frozenset) de estados activos para comparar con defaults."""
+    return frozenset(filters.active_status_values())
+
+
+@admin_bp.route('/localizar-denuncias')
+@login_required
+def localizar_denuncias():
+    """Renderiza el panel de mapa con filtros y resumen analítico."""
+    filters = get_localizar_filters(request.args)
+    tickets = query_tickets_for_map(filters)
+    summary = compute_summary(tickets, filters)
+
+    # Serializar markers a JSON para que Leaflet JS los renderice en el template.
+    markers = serialize_markers(tickets)
+
+    # Bandera para el botón "Limpiar filtros": sólo cuando los filtros difieren del default.
+    is_default_filters = (
+        _localizar_active_status_set(filters) == frozenset(DEFAULT_ACTIVE_STATUSES)
+        and not filters.date_from
+        and not filters.date_to
+        and not filters.category
+        and not filters.area
+        and not filters.q
+        and filters.has_photo == 'all'
+    )
+
+    return render_template(
+        'admin/localizar_denuncias.html',
+        filters=filters,
+        tickets=tickets,
+        summary=summary,
+        markers_json=markers,
+        status_label=STATUS_LABEL,
+        default_active_statuses=DEFAULT_ACTIVE_STATUSES,
+        is_default_filters=is_default_filters,
+        distinct_areas=get_distinct_areas(),
+        distinct_categories=get_distinct_categories(),
+        csv_query_string=filters_to_query_string(filters),
+    )
+
+
+@admin_bp.route('/localizar-denuncias/export.csv')
+@login_required
+def localizar_denuncias_export_csv():
+    """Descarga CSV analítico respetando los filtros activos."""
+    filters = get_localizar_filters(request.args)
+    csv_bytes, filename = export_tickets_csv(filters)
+
+    log_activity(
+        action='EXPORT_LOCALIZAR_CSV',
+        details=(
+            f'Exportación CSV de Localizar Denuncias '
+            f'({summary_size_hint(filters)} filtros aplicados)'
+        ),
+        user=current_user,
+    )
+
+    return Response(
+        csv_bytes,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+        },
+    )
+
+
+def summary_size_hint(filters) -> str:
+    """Texto compacto para el log de auditoría."""
+    parts = []
+    if filters.statuses:
+        parts.append(f"estados={','.join(filters.statuses)}")
+    if filters.date_from:
+        parts.append(f"desde={filters.date_from:%Y-%m-%d}")
+    if filters.date_to:
+        parts.append(f"hasta={filters.date_to:%Y-%m-%d}")
+    if filters.area:
+        parts.append(f"area={filters.area}")
+    if filters.category:
+        parts.append(f"categoria={filters.category}")
+    if filters.has_photo and filters.has_photo != 'all':
+        parts.append(f"foto={filters.has_photo}")
+    if filters.q:
+        parts.append(f"q={filters.q[:30]}")
+    return ' | '.join(parts) or 'sin filtros adicionales'
