@@ -7,16 +7,22 @@
         <p class="text-slate-500 font-medium">Listado completo de reportes ciudadanos recibidos.</p>
     </div>
     
-    <form class="w-full md:w-96" method="GET" action="{{ url_for('admin.tickets_list') }}">
-        <div class="relative group">
-            <div class="absolute inset-y-0 start-0 flex items-center ps-4 pointer-events-none transition-colors group-focus-within:text-blue-600">
-                <svg class="w-5 h-5 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
-                </svg>
+    <div class="flex w-full md:w-auto items-center gap-2">
+        <form class="flex-1 md:w-96" method="GET" action="{{ url_for('admin.tickets_list') }}">
+            <input type="hidden" name="status" value="{{ current_status or '' }}">
+            <div class="relative group">
+                <div class="absolute inset-y-0 start-0 flex items-center ps-4 pointer-events-none transition-colors group-focus-within:text-blue-600">
+                    <svg class="w-5 h-5 text-slate-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                    </svg>
+                </div>
+                <input type="text" name="q" id="simple-search" class="bg-white border-slate-200 text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full ps-11 p-3.5 shadow-sm transition-all duration-200" placeholder="Buscar por seguimiento o correo..." value="{{ request.args.get('q', '') }}">
             </div>
-            <input type="text" name="q" id="simple-search" class="bg-white border-slate-200 text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full ps-11 p-3.5 shadow-sm transition-all duration-200" placeholder="Buscar por seguimiento o correo..." value="{{ request.args.get('q', '') }}">
-        </div>
-    </form>
+        </form>
+        <a href="{{ url_for('admin.tickets_export_csv', status=current_status, q=request.args.get('q', '')) }}" class="inline-flex items-center justify-center p-3.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors shadow-sm" title="Exportar CSV" aria-label="Exportar CSV">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </a>
+    </div>
 </div>
 
 <!-- Tabs de estado Modernos -->

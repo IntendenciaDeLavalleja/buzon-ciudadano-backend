@@ -175,7 +175,19 @@ def tickets_list():
     status_filter = request.args.get('status')
     search_query = request.args.get('q')
 
-    query = Ticket.query.order_by(Ticket.created_at.desc())
+    query = filtered_tickets_query(status_filter, search_query)
+
+    pagination = query.paginate(page=page, per_page=20)
+    
+    return render_template(
+        'admin/tickets.html', 
+        tickets=pagination, 
+        current_status=status_filter
+    )
+
+
+def filtered_tickets_query(status_filter, search_query):
+    query = Ticket.query
 
     if status_filter and status_filter in TicketStatus.__members__:
         query = query.filter_by(status=TicketStatus(status_filter))
@@ -187,12 +199,65 @@ def tickets_list():
             (Ticket.email.like(search))
         )
 
-    pagination = query.paginate(page=page, per_page=20)
-    
-    return render_template(
-        'admin/tickets.html', 
-        tickets=pagination, 
-        current_status=status_filter
+    return query.order_by(Ticket.created_at.desc())
+
+
+@admin_bp.route('/tickets/export.csv')
+@login_required
+def tickets_export_csv():
+    status_filter = request.args.get('status')
+    search_query = request.args.get('q')
+    tickets = filtered_tickets_query(status_filter, search_query).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'ID', 'Código de seguimiento', 'Estado', 'Municipio o destino',
+        'Categoría', 'Nombre completo', 'Correo electrónico', 'Latitud',
+        'Longitud', 'Fecha de creación', 'Fecha de actualización',
+        'Dirección IP', 'Agente de usuario',
+    ])
+
+    for ticket in tickets:
+        writer.writerow([
+            ticket.id,
+            ticket.tracking_code,
+            ticket.status.label,
+            ticket.municipality_or_destination,
+            ticket.category,
+            ticket.full_name,
+            ticket.email,
+            ticket.location_lat if ticket.location_lat is not None else '',
+            ticket.location_lng if ticket.location_lng is not None else '',
+            (
+                ticket.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                if ticket.created_at else ''
+            ),
+            (
+                ticket.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+                if ticket.updated_at else ''
+            ),
+            ticket.ip_address or '',
+            ticket.user_agent or '',
+        ])
+
+    log_activity(
+        action='EXPORT_TICKETS_CSV',
+        details=(
+            f'Exportación CSV de tickets: {len(tickets)} resultado(s), '
+            f'estado={status_filter or "todos"}, '
+            f'búsqueda={search_query or "sin filtro"}'
+        ),
+        user=current_user,
+    )
+
+    filename = (
+        f"tickets_extracto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 
 @admin_bp.route('/tickets/<int:id>', methods=['GET'])
