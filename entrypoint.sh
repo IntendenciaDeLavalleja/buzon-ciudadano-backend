@@ -6,9 +6,9 @@ rm -rf "$PROMETHEUS_MULTIPROC_DIR"
 mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
 
 echo "Running database migrations..."
-if ! flask db upgrade; then
-    echo "WARNING: Database migration failed. The application will still start but may not function correctly."
-fi
+# Do not serve requests with a schema missing required tables.
+# With set -e, a failed migration prevents this release from becoming healthy.
+flask db upgrade
 
 echo "Starting Gunicorn..."
 exec gunicorn -c /app/gunicorn.conf.py "wsgi:app"

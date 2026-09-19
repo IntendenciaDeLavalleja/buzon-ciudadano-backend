@@ -14,6 +14,8 @@ def _parse_list_from_env(name: str) -> list[str]:
 
 
 class Config:
+    # Set false only during the documented staged frontend/backend rollout.
+    CAPTCHA_REQUIRED = os.environ.get('CAPTCHA_REQUIRED', 'true').lower() in ('true', '1', 't')
     # Core Flask
     SECRET_KEY = os.environ.get('SECRET_KEY')
     if not SECRET_KEY:

@@ -10,6 +10,20 @@ from app.services.mail_service import mail_service
 from app.utils.validators import validate_upload_file, FileValidationError
 
 from . import public_bp
+from app.services.captcha_service import create_challenge, consume_challenge
+
+
+@public_bp.route('/api/captcha', methods=['GET'])
+@limiter.limit("20 per minute")
+def captcha():
+    try:
+        response = jsonify(create_challenge())
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Could not create citizen captcha')
+        return jsonify(error='No se pudo cargar la verificación. Intentá nuevamente.'), 503
 
 @public_bp.route('/api/tickets', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -23,6 +37,11 @@ def create_ticket():
         data = request.get_json()
     else:
         data = request.form.to_dict()
+
+    if not isinstance(data, dict):
+        return jsonify(error='Datos del reporte inválidos.'), 400
+    captcha_id = data.pop('captcha_id', None)
+    captcha_answer = data.pop('captcha_answer', None)
 
     # 2. Validar input con Schema
     schema = TicketCreateSchema()
@@ -44,6 +63,12 @@ def create_ticket():
 
     # 4. Crear Ticket e Insertar
     try:
+        if current_app.config.get('CAPTCHA_REQUIRED', True) or captcha_id is not None or captcha_answer is not None:
+            if not consume_challenge(captcha_id, captcha_answer):
+                return jsonify(
+                    error='La verificación es incorrecta, venció o ya fue utilizada. Resolvé una nueva suma.',
+                    code='captcha_invalid',
+                ), 400
         tracking_code = Ticket.generate_tracking_code()
         
         ticket = Ticket(
